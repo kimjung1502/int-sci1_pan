@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>판 경계 탐구 - 위성지도</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      height: 100vh;
+      font-family: 'Malgun Gothic', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+    }
+
+    #map {
+      flex: 1;
+    }
+
+    #sidebar {
+      width: 280px;
+      background: #16213e;
+      display: flex;
+      flex-direction: column;
+      border-left: 2px solid #0f3460;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 16px 14px 12px;
+      background: #0f3460;
+      border-bottom: 1px solid #1a4a7a;
+    }
+
+    #sidebar-header h1 {
+      font-size: 15px;
+      font-weight: bold;
+      color: #e94560;
+      margin-bottom: 4px;
+    }
+
+    #sidebar-header p {
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 14px 0;
+      padding: 8px 12px;
+      background: #1a3a5c;
+      border: 1px solid #2a5a8c;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      user-select: none;
+    }
+
+    .toggle-row:hover { background: #1e4a70; }
+
+    .toggle-switch {
+      width: 36px;
+      height: 20px;
+      background: #333;
+      border-radius: 10px;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .toggle-switch.on-red  { background: #e94560; }
+    .toggle-switch.on-gold { background: #f0b429; }
+
+    .toggle-knob {
+      width: 16px;
+      height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: left 0.2s;
+    }
+
+    .toggle-switch.on-red .toggle-knob,
+    .toggle-switch.on-gold .toggle-knob { left: 18px; }
+
+    .toggle-label {
+      font-size: 12px;
+      color: #ccc;
+      line-height: 1.3;
+    }
+
+    .toggle-label strong {
+      display: block;
+      color: #fff;
+      font-size: 13px;
+    }
+
+    /* 판 이름 라벨 */
+    .plate-label {
+      background: rgba(0, 0, 0, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 5px;
+      padding: 3px 7px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: bold;
+      white-space: nowrap;
+      text-align: center;
+      font-family: 'Malgun Gothic', sans-serif;
+      pointer-events: none;
+      line-height: 1.4;
+    }
+
+    .plate-label .pl-en {
+      display: block;
+      font-size: 9px;
+      color: #bbb;
+      font-weight: normal;
+    }
+
+    #location-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+      margin-top: 4px;
+    }
+
+    #location-list::-webkit-scrollbar { width: 5px; }
+    #location-list::-webkit-scrollbar-track { background: #16213e; }
+    #location-list::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+
+    .category { margin-bottom: 4px; }
+
+    .category-header {
+      padding: 8px 14px 6px;
+      font-size: 11px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .divergent .category-header     { color: #ff6b6b; background: #1a1a2e; }
+    .convergent-co .category-header { color: #ffa94d; background: #1a1a2e; }
+    .convergent-oo .category-header { color: #69db7c; background: #1a1a2e; }
+    .convergent-cc .category-header { color: #74c0fc; background: #1a1a2e; }
+    .transform .category-header     { color: #da77f2; background: #1a1a2e; }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .divergent .dot      { background: #ff6b6b; }
+    .convergent-co .dot  { background: #ffa94d; }
+    .convergent-oo .dot  { background: #69db7c; }
+    .convergent-cc .dot  { background: #74c0fc; }
+    .transform .dot      { background: #da77f2; }
+
+    .location-btn {
+      width: 100%;
+      padding: 9px 14px 9px 26px;
+      text-align: left;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid #1f2d4a;
+      cursor: pointer;
+      color: #ccc;
+      transition: background 0.15s;
+    }
+
+    .location-btn:hover  { background: #1e2d50; color: #fff; }
+    .location-btn.active { background: #0f3460; color: #fff; }
+
+    .location-btn .name-ko {
+      font-size: 13px;
+      font-weight: bold;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .location-btn .name-en {
+      font-size: 10px;
+      color: #888;
+      display: block;
+    }
+
+    #current-info {
+      padding: 12px 14px;
+      background: #0a1628;
+      border-top: 1px solid #0f3460;
+      font-size: 11px;
+      color: #aaa;
+      min-height: 60px;
+    }
+
+    #current-info .info-name {
+      font-size: 13px;
+      font-weight: bold;
+      color: #e2e2e2;
+      margin-bottom: 4px;
+    }
+
+    #current-info .info-desc { line-height: 1.5; color: #999; }
+
+    /* Leaflet 컨트롤 위치 조정 */
+    .leaflet-bottom.leaflet-right { bottom: 10px; }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>🌍 판 경계 탐구</h1>
+    <p>위치를 클릭하면 위성지도로 이동합니다</p>
+  </div>
+
+  <div class="toggle-row" onclick="toggleBoundaries()">
+    <div class="toggle-switch" id="toggle-sw-boundary">
+      <div class="toggle-knob"></div>
+    </div>
+    <div class="toggle-label">
+      <strong>판 경계선 표시</strong>
+      클릭하여 켜기 / 끄기
+    </div>
+  </div>
+
+  <div class="toggle-row" onclick="togglePlateNames()">
+    <div class="toggle-switch" id="toggle-sw-names">
+      <div class="toggle-knob"></div>
+    </div>
+    <div class="toggle-label">
+      <strong>판 이름 표시</strong>
+      클릭하여 켜기 / 끄기
+    </div>
+  </div>
+
+  <div id="location-list"></div>
+
+  <div id="current-info">
+    <div class="info-name" id="info-name">위치를 선택하세요</div>
+    <div class="info-desc" id="info-desc">목록에서 판 경계 위치를 클릭하면 지도가 해당 위치로 이동합니다.</div>
+  </div>
+</div>
+
+<script>
+/* ── 지도 초기화 ── */
+const map = L.map('map', { zoomControl: true }).setView([20, 0], 3);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Tiles © Esri',
+  maxZoom: 18
+}).addTo(map);
+
+/* ── 판 경계선 레이어 ── */
+let boundaryLayer = null;
+let boundaryOn = false;
+
+function loadBoundaries() {
+  if (boundaryLayer) return;
+  fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json')
+    .then(r => r.json())
+    .then(data => {
+      boundaryLayer = L.geoJSON(data, {
+        style: { color: '#ff3333', weight: 1.8, opacity: 0.85 }
+      });
+      if (boundaryOn) boundaryLayer.addTo(map);
+    })
+    .catch(() => alert('판 경계선 데이터를 불러오지 못했습니다.\n인터넷 연결을 확인해 주세요.'));
+}
+
+function toggleBoundaries() {
+  const sw = document.getElementById('toggle-sw-boundary');
+  boundaryOn = !boundaryOn;
+  sw.classList.toggle('on-red', boundaryOn);
+  if (boundaryOn) {
+    loadBoundaries();
+    if (boundaryLayer) boundaryLayer.addTo(map);
+  } else {
+    if (boundaryLayer) map.removeLayer(boundaryLayer);
+  }
+}
+
+/* ── 판 이름 레이어 ── */
+const plateData = [
+  { ko: '태평양판',           en: 'Pacific',          lat:   5,  lng: -165 },
+  { ko: '북아메리카판',       en: 'North American',   lat:  50,  lng: -100 },
+  { ko: '남아메리카판',       en: 'South American',   lat: -20,  lng:  -55 },
+  { ko: '유라시아판',         en: 'Eurasian',         lat:  55,  lng:   60 },
+  { ko: '아프리카판',         en: 'African',          lat:   5,  lng:   20 },
+  { ko: '인도-오스트레일리아판', en: 'Indo-Australian', lat: -28, lng:  110 },
+  { ko: '남극판',             en: 'Antarctic',        lat: -75,  lng:    0 },
+  { ko: '나즈카판',           en: 'Nazca',            lat: -18,  lng:  -95 },
+  { ko: '아라비아판',         en: 'Arabian',          lat:  23,  lng:   45 },
+  { ko: '카리브판',           en: 'Caribbean',        lat:  15,  lng:  -73 },
+  { ko: '코코스판',           en: 'Cocos',            lat:  10,  lng:  -88 },
+  { ko: '필리핀판',           en: 'Philippine',       lat:  14,  lng:  133 },
+  { ko: '스코샤판',           en: 'Scotia',           lat: -55,  lng:  -45 },
+  { ko: '후안데푸카판',       en: 'Juan de Fuca',     lat:  47,  lng: -129 },
+];
+
+const plateNameGroup = L.layerGroup();
+plateData.forEach(p => {
+  const icon = L.divIcon({
+    className: '',
+    html: `<div class="plate-label">${p.ko}<span class="pl-en">${p.en} Plate</span></div>`,
+    iconAnchor: [0, 0]
+  });
+  L.marker([p.lat, p.lng], { icon, interactive: false }).addTo(plateNameGroup);
+});
+
+let plateNamesOn = false;
+
+function togglePlateNames() {
+  const sw = document.getElementById('toggle-sw-names');
+  plateNamesOn = !plateNamesOn;
+  sw.classList.toggle('on-gold', plateNamesOn);
+  if (plateNamesOn) {
+    plateNameGroup.addTo(map);
+  } else {
+    map.removeLayer(plateNameGroup);
+  }
+}
+
+/* ── 위치 목록 ── */
+const locations = [
+  {
+    category: "divergent",
+    label: "🔴 발산 경계",
+    places: [
+      { ko: "아이슬란드 열곡", en: "Iceland Rift Zone", lat: 64.9, lng: -18.0, zoom: 9,
+        desc: "대서양 중앙 해령이 지표에 드러난 곳. 북아메리카판과 유라시아판이 갈라지는 모습을 직접 볼 수 있습니다." },
+      { ko: "중앙 대서양 해령", en: "Mid-Atlantic Ridge", lat: 0, lng: -20, zoom: 5,
+        desc: "대서양 한가운데를 남북으로 뻗은 해저 산맥. 새로운 해양판이 만들어지는 발산 경계입니다." },
+      { ko: "동아프리카 열곡대", en: "East African Rift Valley", lat: 3.0, lng: 36.0, zoom: 6,
+        desc: "아프리카판이 갈라지고 있는 열곡. 먼 미래에 새로운 바다가 될 곳입니다." },
+      { ko: "홍해 (아라비아-아프리카)", en: "Red Sea Rift", lat: 20.0, lng: 38.0, zoom: 6,
+        desc: "아라비아판과 아프리카판이 벌어지며 만들어진 바다. 발산 경계가 바다로 발전한 사례입니다." },
+    ]
+  },
+  {
+    category: "convergent-co",
+    label: "🟠 수렴 경계 (해양-대륙)",
+    places: [
+      { ko: "안데스 산맥 (칠레 해구)", en: "Andes / Chile Trench", lat: -33.0, lng: -70.0, zoom: 7,
+        desc: "나즈카판이 남아메리카판 아래로 섭입하며 형성된 산맥. 세계에서 가장 긴 대륙 산맥입니다." },
+      { ko: "캐스케이드 산맥", en: "Cascade Range", lat: 46.2, lng: -122.2, zoom: 8,
+        desc: "후안데푸카판이 섭입하며 형성된 화산 산맥. 세인트헬렌스 화산 등이 이곳에 있습니다." },
+    ]
+  },
+  {
+    category: "convergent-oo",
+    label: "🟢 수렴 경계 (해양-해양)",
+    places: [
+      { ko: "마리아나 해구", en: "Mariana Trench", lat: 11.3, lng: 142.2, zoom: 7,
+        desc: "세계에서 가장 깊은 곳(약 11km). 태평양판이 마리아나판 아래로 섭입합니다." },
+      { ko: "일본 해구", en: "Japan Trench", lat: 39.0, lng: 144.0, zoom: 7,
+        desc: "태평양판이 오호츠크판 아래로 섭입하는 경계. 2011년 동일본 대지진의 진원 지역입니다." },
+      { ko: "알류샨 열도", en: "Aleutian Islands", lat: 52.0, lng: -170.0, zoom: 5,
+        desc: "태평양판이 북아메리카판 아래로 섭입하며 만들어진 호상 열도와 화산호입니다." },
+      { ko: "통가 해구", en: "Tonga Trench", lat: -20.0, lng: -174.0, zoom: 7,
+        desc: "세계에서 두 번째로 깊은 해구. 태평양판이 인도-오스트레일리아판 아래로 섭입합니다." },
+    ]
+  },
+  {
+    category: "convergent-cc",
+    label: "🔵 수렴 경계 (대륙-대륙)",
+    places: [
+      { ko: "히말라야 산맥", en: "Himalayas (India-Eurasia)", lat: 27.9, lng: 86.9, zoom: 7,
+        desc: "인도판과 유라시아판의 충돌로 형성된 세계 최고 산맥. 에베레스트(8,849m)가 여기에 있습니다." },
+      { ko: "알프스 산맥", en: "Alps (Africa-Eurasia)", lat: 46.5, lng: 8.0, zoom: 7,
+        desc: "아프리카판과 유라시아판의 충돌로 형성된 산맥. 대륙-대륙 수렴 경계의 대표 사례입니다." },
+    ]
+  },
+  {
+    category: "transform",
+    label: "🟣 변환 경계",
+    places: [
+      { ko: "산안드레아스 단층", en: "San Andreas Fault", lat: 36.0, lng: -120.5, zoom: 8,
+        desc: "태평양판과 북아메리카판이 수평으로 미끄러지는 변환 단층. 캘리포니아 지진의 주요 원인입니다." },
+      { ko: "뉴질랜드 알파인 단층", en: "Alpine Fault, New Zealand", lat: -43.5, lng: 170.2, zoom: 8,
+        desc: "태평양판과 인도-오스트레일리아판 사이의 변환 단층. 남섬을 가로지릅니다." },
+      { ko: "터키 북아나톨리아 단층", en: "North Anatolian Fault", lat: 40.7, lng: 32.0, zoom: 8,
+        desc: "아나톨리아판이 유라시아판에 대해 서쪽으로 이동하는 변환 단층. 터키 지진의 주요 원인입니다." },
+    ]
+  }
+];
+
+let activeBtn = null;
+
+function navigate(place, btn) {
+  map.flyTo([place.lat, place.lng], place.zoom, { duration: 1.2 });
+  document.getElementById('info-name').textContent = place.ko;
+  document.getElementById('info-desc').textContent = place.desc;
+  if (activeBtn) activeBtn.classList.remove('active');
+  btn.classList.add('active');
+  activeBtn = btn;
+}
+
+const list = document.getElementById('location-list');
+
+locations.forEach(group => {
+  const cat = document.createElement('div');
+  cat.className = `category ${group.category}`;
+
+  const header = document.createElement('div');
+  header.className = 'category-header';
+  header.innerHTML = `<span class="dot"></span>${group.label}`;
+  cat.appendChild(header);
+
+  group.places.forEach(place => {
+    const btn = document.createElement('button');
+    btn.className = 'location-btn';
+    btn.innerHTML = `<span class="name-ko">${place.ko}</span><span class="name-en">${place.en}</span>`;
+    btn.addEventListener('click', () => navigate(place, btn));
+    cat.appendChild(btn);
+  });
+
+  list.appendChild(cat);
+});
+</script>
+</body>
+</html>
